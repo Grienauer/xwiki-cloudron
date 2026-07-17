@@ -29,6 +29,8 @@ RUN printf '%s\n' \
   '  <repositories>' \
   '    <repository><id>xwiki-releases</id>' \
   '      <url>https://maven.xwiki.org/releases/</url></repository>' \
+  '    <repository><id>xwiki-externals</id>' \
+  '      <url>https://maven.xwiki.org/externals/</url></repository>' \
   '  </repositories>' \
   "  <dependencies><dependency>" \
   "    <groupId>org.xwiki.contrib.ldap</groupId>" \
