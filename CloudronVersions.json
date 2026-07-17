@@ -5,7 +5,7 @@
             "manifest": {
                 "id": "org.xwiki.cloudronapp",
                 "title": "XWiki",
-                "author": "acolono GmbH",
+                "author": "Nico Grienauer",
                 "description": "XWiki is a free and open source, Java-based enterprise wiki platform with a\nstrong focus on extensibility. It offers structured content, powerful in-place\nWYSIWYG editing, application development on top of the wiki, fine-grained rights\nmanagement and a Confluence import - which makes it a common self-hosted\nConfluence replacement.\n\nThis package wraps the official `xwiki` Docker image (Tomcat + MySQL flavour) so\nit runs inside Cloudron's managed environment: the database is provided by the\nCloudron MySQL addon, all state lives in the app's backed-up `/app/data` volume,\nand TLS / domain / backups are handled by Cloudron.\n",
                 "tagline": "The advanced open source enterprise wiki",
                 "version": "1.0.0",
@@ -13,7 +13,7 @@
                 "httpPort": 8080,
                 "manifestVersion": 2,
                 "website": "https://www.xwiki.org",
-                "contactEmail": "nico@acolono.com",
+                "contactEmail": "nico@grienauer.com",
                 "memoryLimit": 3221225472,
                 "tags": [
                     "wiki",
@@ -29,15 +29,15 @@
                     }
                 },
                 "postInstallMessage": "XWiki is starting. The very first boot builds the database and can take several minutes - watch progress with `cloudron logs -f`. Once loaded, open the app and create the initial admin user via the setup wizard.",
-                "iconUrl": "https://raw.githubusercontent.com/acolono/xwiki-cloudron/main/logo.png",
-                "packagerName": "acolono GmbH",
-                "packagerUrl": "https://www.acolono.com",
+                "iconUrl": "https://raw.githubusercontent.com/grienauer/xwiki-cloudron/main/logo.png",
+                "packagerName": "Grienauer",
+                "packagerUrl": "https://www.agrienauer.com",
                 "minBoxVersion": "9.1.0",
                 "changelog": "* Initial release\n",
                 "mediaLinks": [
-                    "https://raw.githubusercontent.com/acolono/xwiki-cloudron/main/screenshot.png"
+                    "https://raw.githubusercontent.com/grienauer/xwiki-cloudron/main/screenshot.png"
                 ],
-                "dockerImage": "ghcr.io/acolono/xwiki-cloudron:1.0.0"
+                "dockerImage": "ghcr.io/grienauer/xwiki-cloudron:1.0.0"
             },
             "creationDate": "Fri, 17 Jul 2026 12:31:38 GMT",
             "ts": "Fri, 17 Jul 2026 12:31:38 GMT",
