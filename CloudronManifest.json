@@ -1,0 +1,36 @@
+{
+  "id": "org.xwiki.cloudronapp",
+  "title": "XWiki",
+  "author": "acolono GmbH",
+  "description": "file://DESCRIPTION.md",
+  "tagline": "The advanced open source enterprise wiki",
+  "version": "1.0.0",
+  "healthCheckPath": "/",
+  "httpPort": 8080,
+  "manifestVersion": 2,
+  "website": "https://www.xwiki.org",
+  "contactEmail": "nico@acolono.com",
+  "memoryLimit": 3221225472,
+  "tags": [
+    "wiki",
+    "knowledge base",
+    "confluence alternative",
+    "documentation"
+  ],
+  "addons": {
+    "mysql": {},
+    "localstorage": {},
+    "sendmail": {
+      "optional": true
+    }
+  },
+  "postInstallMessage": "XWiki is starting. The very first boot builds the database and can take several minutes - watch progress with `cloudron logs -f`. Once loaded, open the app and create the initial admin user via the setup wizard.",
+  "iconUrl": "https://raw.githubusercontent.com/acolono/xwiki-cloudron/main/logo.png",
+  "packagerName": "acolono GmbH",
+  "packagerUrl": "https://www.acolono.com",
+  "minBoxVersion": "9.1.0",
+  "changelog": "file://CHANGELOG",
+  "mediaLinks": [
+    "https://raw.githubusercontent.com/acolono/xwiki-cloudron/main/screenshot.png"
+  ]
+}
