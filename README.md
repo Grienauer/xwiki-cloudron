@@ -27,88 +27,120 @@ handling.
 | `.github/workflows/publish.yml` | Builds + pushes the image to ghcr.io and updates the catalog |
 | `.dockerignore` | Keeps the build context small |
 
-## Two ways to install
+## Install (recommended) — Community App via the dashboard
 
-| | Community App (UI, no local CLI) | CLI |
-|---|---|---|
-| Where you build | GitHub Actions builds & pushes the image for you | On your Cloudron server |
-| How you install | Paste one URL into the dashboard | `cloudron install` from this folder |
-| Best when | You want a repeatable, UI-driven install/update | One-off, quick test |
+No CLI, no clone, no GitHub account of your own needed — this repo already
+publishes a maintained image and version catalog. In your Cloudron dashboard:
 
-Pick **Community App** if you want to avoid the CLI entirely (recommended). See below.
-
-## Option A — Community App via the dashboard (recommended)
-
-This is the "Add custom app → **Community App** (CloudronVersions.json URL)" box
-in your Cloudron dashboard. It installs a **pre-built image from a registry** —
-so the source on GitHub is not enough by itself; an image has to be built and
-pushed, and a `CloudronVersions.json` catalog has to point at it. The included
-GitHub Actions workflow does all of that automatically.
-
-**One-time setup:**
-
-1. Create a GitHub repo (e.g. `grienauer/xwiki-cloudron`) and push **all** the
-   files in this folder to it, including `.github/workflows/publish.yml`.
-2. The workflow runs on push to `main` (or manually via the Actions tab). It:
-   - builds the image and pushes it to **GitHub Container Registry**
-     (`ghcr.io/<owner>/xwiki-cloudron:<version>`),
-   - regenerates `CloudronVersions.json` and commits it back.
-3. Make the container image **public**: repo → *Packages* → `xwiki-cloudron` →
-   *Package settings* → *Change visibility* → **Public**. (Cloudron pulls it
-   anonymously.)
-4. In the Cloudron dashboard: **Add custom app → Community App**, and paste:
+1. **Add custom app → Community App**.
+2Paste this **CloudronVersions.json URL**:
 
    ```
-   https://raw.githubusercontent.com/<owner>/xwiki-cloudron/main/CloudronVersions.json
+   https://raw.githubusercontent.com/grienauer/xwiki-cloudron/main/CloudronVersions.json
    ```
 
-   Then choose the location/domain and install. Future versions you publish
-   appear as updates automatically.
+3. Choose the location/domain and install.
 
-> ⚠️ Adjust these to your actual repo before pushing: the repo owner/name in the
-> URLs, and `iconUrl` / `packagerUrl` / `mediaLinks` in `CloudronManifest.json`
-> (they currently assume `grienauer/xwiki-cloudron`).
+This catalog is regenerated automatically by this repo's GitHub Actions
+workflow every time a new version ships, so future versions appear as updates
+in the dashboard with no further action from you.
 
-## Option B — CLI (build on the server)
-
-- SSH / API access to your Cloudron and a domain you can point at the app.
-- The Cloudron CLI on your machine:
-
-  ```bash
-  sudo npm install -g cloudron
-  cloudron login my.cloudron-domain.com
-  ```
-
-```bash
-# from inside this folder
-cloudron install --location wiki.your-domain.com
-```
-
-Cloudron uploads the folder, builds the image **on the server**, provisions a
-PostgreSQL database and starts the app.
-
-> First boot builds the whole XWiki schema and can take several minutes. Follow
-> it with `cloudron logs -f`. The app is reachable once you see Tomcat report the
+> First boot builds the whole XWiki schema and can take several minutes. Be patient, reload App. You can follow
+> the status in the logs. The app is reachable once you see Tomcat report the
 > ROOT context has started. On first visit XWiki runs a short setup wizard where
 > you create the admin user and choose which default flavor/extensions to install.
 
-## Update / rebuild
+## Alternative: CLI install with the pre-built image
+
+Same published image, but installed via the Cloudron CLI instead of the
+dashboard — no clone needed.
+
+**1. Install the Cloudron CLI and log in:**
 
 ```bash
-cloudron update --app wiki.your-domain.com
+sudo npm install -g cloudron
+cloudron login my.cloudron-domain.com
 ```
 
-To move to a newer XWiki release, either keep `stable-postgres-tomcat` (rebuild
-picks up the latest) or pin an explicit tag in the `Dockerfile`, e.g.:
+**2. Find the version tag you want.** Open the
+[package page](https://github.com/grienauer/xwiki-cloudron/pkgs/container/xwiki-cloudron)
+on GitHub — it lists every published version as a tag (e.g. `2.0.0`), newest
+first. You can also just use `latest`. The same version list lives in this
+repo's [`CHANGELOG`](CHANGELOG) if you want release notes per version.
 
-```dockerfile
-FROM xwiki:17.10-postgres-tomcat
+**3. Install:**
+
+```bash
+cloudron install --image ghcr.io/grienauer/xwiki-cloudron:VERSION --location wiki.your-domain.com
+```
+
+Replace `VERSION` with the tag from step 2 (or `latest`). Cloudron pulls the
+image, provisions a PostgreSQL database, and starts the app — no build step on
+your machine or on the server.
+
+### Update to a newer version
+
+Find the new tag on the [package page](https://github.com/grienauer/xwiki-cloudron/pkgs/container/xwiki-cloudron), then:
+
+```bash
+cloudron update --app wiki.your-domain.com --image ghcr.io/grienauer/xwiki-cloudron:NEW_VERSION
 ```
 
 On the next start `start.sh` detects the version change, reseeds the webapp and
 lets XWiki's Distribution Wizard migrate the database. **Your content, the
 permanent directory and the database are preserved.** As always, take a backup
 first (`cloudron update` does this automatically).
+
+## Alternative: run your own build (optional)
+
+Only needed if you want to maintain your **own fork** — e.g. to customize the
+package, publish under your own registry namespace, or get auto-discovered
+updates in the Cloudron dashboard's **Community App** installer instead of
+running `cloudron update` by hand.
+
+**One-time setup:**
+
+1. Clone this repo and push it to your own GitHub repo (e.g.
+   `yourname/xwiki-cloudron`), including `.github/workflows/publish.yml`:
+
+   ```bash
+   git clone https://github.com/grienauer/xwiki-cloudron.git
+   cd xwiki-cloudron
+   git remote set-url origin git@github.com:yourname/xwiki-cloudron.git
+   git push -u origin main
+   ```
+
+2. Adjust these to your repo before pushing: the repo owner/name in any URLs
+   below, and `iconUrl` / `packagerUrl` / `mediaLinks` in
+   `CloudronManifest.json` (they currently point at `grienauer/xwiki-cloudron`).
+3. The workflow runs on push to `main` (or manually via the Actions tab). It:
+   - builds the image and pushes it to **GitHub Container Registry**
+     (`ghcr.io/<owner>/xwiki-cloudron:<version>`),
+   - regenerates `CloudronVersions.json` and commits it back.
+4. Make the container image **public**: repo → *Packages* → `xwiki-cloudron` →
+   *Package settings* → *Change visibility* → **Public**. (Cloudron pulls it
+   anonymously.)
+5. In the Cloudron dashboard: **Add custom app → Community App**, and paste:
+
+   ```
+   https://raw.githubusercontent.com/<owner>/xwiki-cloudron/main/CloudronVersions.json
+   ```
+
+   Then choose the location/domain and install. Future versions you publish
+   appear as updates automatically in the dashboard.
+
+### Building on the Cloudron server instead
+
+If you'd rather not use GitHub Actions at all, clone the repo and build
+directly on your Cloudron server:
+
+```bash
+# from inside your clone of this repo
+cloudron install --location wiki.your-domain.com
+```
+
+Cloudron uploads the folder and builds the image **on the server** instead of
+pulling a pre-built one.
 
 ## Useful commands
 
@@ -156,14 +188,8 @@ cloudron exec -- bash -c 'PGPASSWORD="$CLOUDRON_POSTGRESQL_PASSWORD" psql \
 - **Icon.** No `icon` is bundled; add a 256x256 PNG and an `"icon": "logo.png"`
   line to the manifest if you want a custom store icon.
 
-## Publishing to your own Cloudron App Store (optional)
+## More on packaging
 
-For a repeatable, non-server build you can build locally and push to a registry:
-
-```bash
-docker login
-cloudron build           # builds + pushes username/xwiki:<tag>
-cloudron install --image username/xwiki:<tag> --location wiki.your-domain.com
-```
-
-See https://docs.cloudron.io/packaging/ for the full packaging reference.
+For the full Cloudron packaging reference (building locally with
+`cloudron build`, publishing to other registries, manifest options, etc.), see
+https://docs.cloudron.io/packaging/.
