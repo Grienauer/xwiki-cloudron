@@ -40,7 +40,7 @@ GitHub Actions workflow does all of that automatically.
 
 **One-time setup:**
 
-1. Create a GitHub repo (e.g. `acolono/xwiki-cloudron`) and push **all** the
+1. Create a GitHub repo (e.g. `grienauer/xwiki-cloudron`) and push **all** the
    files in this folder to it, including `.github/workflows/publish.yml`.
 2. The workflow runs on push to `main` (or manually via the Actions tab). It:
    - builds the image and pushes it to **GitHub Container Registry**
@@ -60,7 +60,7 @@ GitHub Actions workflow does all of that automatically.
 
 > ⚠️ Adjust these to your actual repo before pushing: the repo owner/name in the
 > URLs, and `iconUrl` / `packagerUrl` / `mediaLinks` in `CloudronManifest.json`
-> (they currently assume `acolono/xwiki-cloudron`).
+> (they currently assume `grienauer/xwiki-cloudron`).
 
 ## Option B — CLI (build on the server)
 
