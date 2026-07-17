@@ -1,2 +1,8 @@
+[2.0.0]
+* Switch database from MySQL to PostgreSQL. This removes the manual one-time MySQL PROCESS-privilege grant and utf8mb4_bin collation step - XWiki now initializes with no manual database steps. NOTE: this is a database engine change, so it requires a fresh install (no in-place upgrade from 1.x).
+
+[1.0.1]
+* Document the required MySQL PROCESS privilege grant and utf8mb4_bin collation fix (post-install message + README).
+
 [1.0.0]
 * Initial release

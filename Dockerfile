@@ -1,9 +1,14 @@
 # XWiki packaged for Cloudron.
 #
-# We build on top of the official XWiki image (Tomcat + MySQL flavour). Pin to a
-# concrete version tag when you want reproducible builds / controlled upgrades;
-# "stable-mysql-tomcat" always tracks the latest stable release.
-FROM xwiki:stable-mysql-tomcat
+# We build on top of the official XWiki image (Tomcat + PostgreSQL flavour). Pin
+# to a concrete version tag when you want reproducible builds / controlled
+# upgrades; "stable-postgres-tomcat" always tracks the latest stable release.
+#
+# PostgreSQL is used instead of MySQL on purpose: XWiki's MySQL migration needs
+# the global PROCESS privilege that Cloudron's isolated MySQL addon does not
+# grant. With PostgreSQL the app user owns its database and XWiki initializes
+# with no manual database steps.
+FROM xwiki:stable-postgres-tomcat
 
 # --- Adapt the image to Cloudron's read-only root filesystem --------------------
 # At runtime Cloudron mounts only /tmp, /run and /app/data as writable. XWiki

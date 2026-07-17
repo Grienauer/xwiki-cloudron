@@ -1,14 +1,19 @@
 #!/bin/bash
 # ---------------------------------------------------------------------------
-# Cloudron start script for XWiki.
+# Cloudron start script for XWiki (PostgreSQL flavour).
 #
 # Responsibilities:
 #   1. Seed the persistent /app/data volume from the baked distribution on the
 #      first run, and reseed the webapp (only) after an XWiki version bump.
-#   2. Map the Cloudron MySQL addon environment to the DB_* variables the
+#   2. Map the Cloudron PostgreSQL addon environment to the DB_* variables the
 #      official XWiki entrypoint expects.
 #   3. Re-apply the DB configuration on every boot (Cloudron addon credentials
 #      can change across restarts) and hand off to the official entrypoint.
+#
+# Why PostgreSQL: XWiki's MySQL migration path queries information_schema InnoDB
+# tables, which needs the global PROCESS privilege that Cloudron does not grant.
+# The PostgreSQL path has no such requirement - the app user owns its own
+# database and can create its schema, so XWiki initializes with no manual steps.
 # ---------------------------------------------------------------------------
 set -eu
 
@@ -25,9 +30,13 @@ DATA_VERSION_FILE=/app/data/xwiki.version
 seed_tomcat() {
     rm -rf "${DATA_TOMCAT}"
     cp -a "${DIST_TOMCAT}" "${DATA_TOMCAT}"
-    # Stash a pristine copy of the hibernate config (still containing the
-    # replaceuser/replacepassword/... placeholders) so we can re-run the
-    # entrypoint's substitution on every boot.
+    # The stock PostgreSQL hibernate template hardcodes the port as ":5432".
+    # Cloudron's PostgreSQL addon may listen on a different port, so turn that
+    # into a "replaceport" placeholder we substitute per-boot from the addon env.
+    sed -i 's#replacecontainer:5432#replacecontainer:replaceport#' \
+        "${WEBINF}/hibernate.cfg.xml"
+    # Stash a pristine copy (still containing the replaceX placeholders) so we
+    # can re-run the substitution on every boot.
     cp -a "${WEBINF}/hibernate.cfg.xml" "${HIBERNATE_DIST}"
 }
 
@@ -48,20 +57,20 @@ if [[ ! -d "${DATA_XWIKI}" ]]; then
     cp -a "${DIST_XWIKI}" "${DATA_XWIKI}"
 fi
 
-# ---- 2. Map the Cloudron MySQL addon to XWiki's DB_* variables -----------------
-export DB_USER="${CLOUDRON_MYSQL_USERNAME}"
-export DB_PASSWORD="${CLOUDRON_MYSQL_PASSWORD}"
-export DB_DATABASE="${CLOUDRON_MYSQL_DATABASE}"
-# XWiki builds a JDBC URL of the form jdbc:mysql://<DB_HOST>/<DB_DATABASE>.
-# Cloudron's MySQL server is not necessarily on the default port 3306, so we
-# fold host+port into DB_HOST (valid for the MySQL JDBC driver).
-export DB_HOST="${CLOUDRON_MYSQL_HOST}:${CLOUDRON_MYSQL_PORT}"
+# ---- 2. Map the Cloudron PostgreSQL addon to XWiki's DB_* variables ------------
+export DB_USER="${CLOUDRON_POSTGRESQL_USERNAME}"
+export DB_PASSWORD="${CLOUDRON_POSTGRESQL_PASSWORD}"
+export DB_DATABASE="${CLOUDRON_POSTGRESQL_DATABASE}"
+# The XWiki entrypoint substitutes DB_HOST for the host only; the port comes from
+# our "replaceport" placeholder (see below), so DB_HOST must NOT include a port.
+export DB_HOST="${CLOUDRON_POSTGRESQL_HOST}"
 
 # ---- 3. Force re-configuration on every boot -----------------------------------
-# Restore the placeholder hibernate config and drop the first-start marker so the
-# official entrypoint re-applies the (possibly changed) DB credentials.
+# Restore the placeholder hibernate config, inject the real port, and drop the
+# first-start marker so the entrypoint re-applies the (possibly changed) creds.
 if [[ -f "${HIBERNATE_DIST}" ]]; then
     cp -a "${HIBERNATE_DIST}" "${WEBINF}/hibernate.cfg.xml"
+    sed -i "s#replaceport#${CLOUDRON_POSTGRESQL_PORT}#" "${WEBINF}/hibernate.cfg.xml"
 fi
 rm -f "${DATA_TOMCAT}/webapps/ROOT/.first_start_completed"
 
@@ -70,5 +79,5 @@ rm -f "${DATA_TOMCAT}/webapps/ROOT/.first_start_completed"
 # above this heap size to leave room for LibreOffice + native memory.
 export JAVA_OPTS="${JAVA_OPTS:-} -Xmx2048m"
 
-echo "==> Starting XWiki (db=${DB_DATABASE} @ ${DB_HOST})"
+echo "==> Starting XWiki (db=${DB_DATABASE} @ ${DB_HOST}:${CLOUDRON_POSTGRESQL_PORT})"
 exec /usr/local/bin/docker-entrypoint.sh xwiki

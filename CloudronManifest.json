@@ -4,7 +4,7 @@
   "author": "Grienauer Nico",
   "description": "file://DESCRIPTION.md",
   "tagline": "The advanced open source enterprise wiki",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "healthCheckPath": "/",
   "httpPort": 8080,
   "manifestVersion": 2,
@@ -18,13 +18,13 @@
     "documentation"
   ],
   "addons": {
-    "mysql": {},
+    "postgresql": {},
     "localstorage": {},
     "sendmail": {
       "optional": true
     }
   },
-  "postInstallMessage": "XWiki is starting. The very first boot builds the database and can take several minutes - watch progress with `cloudron logs -f`. Once loaded, open the app and create the initial admin user via the setup wizard.",
+  "postInstallMessage": "XWiki is starting. The first boot builds the database schema and can take several minutes - follow it with `cloudron logs -f`. Once it finishes, open the app and complete the setup wizard to create the initial admin user.\n\nNote: subwikis (multi-wiki) are unavailable because the app's database user cannot create additional databases/schemas beyond its own.",
   "iconUrl": "https://raw.githubusercontent.com/grienauer/xwiki-cloudron/main/logo.png",
   "packagerName": "Nico Grienauer",
   "packagerUrl": "https://www.grienauer.com",

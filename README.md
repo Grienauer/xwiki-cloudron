@@ -1,18 +1,25 @@
 # XWiki for Cloudron
 
 A custom Cloudron package that runs the official [XWiki](https://www.xwiki.org)
-Docker image (Tomcat + MySQL) inside Cloudron's managed environment. XWiki is
-**not** in the Cloudron App Store (it has been a wishlist item since 2018), so
+Docker image (Tomcat + PostgreSQL) inside Cloudron's managed environment. XWiki
+is **not** in the Cloudron App Store (it has been a wishlist item since 2018), so
 this is the supported way to run it with Cloudron backups, TLS and domain
 handling.
+
+> **Why PostgreSQL and not MySQL?** XWiki's MySQL schema migration queries
+> `information_schema` InnoDB tables, which needs the global `PROCESS` privilege
+> that Cloudron's isolated MySQL addon does not grant — so the MySQL variant
+> fails on first boot unless you manually grant it as root. The PostgreSQL addon
+> makes the app user the owner of its own database, so XWiki initializes with no
+> manual database steps.
 
 ## What's in this package
 
 | File | Purpose |
 |------|---------|
-| `CloudronManifest.json` | App metadata, MySQL + localstorage + sendmail addons, 3 GB memory limit, port 8080 |
-| `Dockerfile` | Builds on `xwiki:stable-mysql-tomcat`, relocates writable dirs for Cloudron's read-only rootfs |
-| `start.sh` | Seeds `/app/data`, maps the Cloudron MySQL addon to XWiki's `DB_*` vars, handles version upgrades |
+| `CloudronManifest.json` | App metadata, PostgreSQL + localstorage + sendmail addons, 3 GB memory limit, port 8080 |
+| `Dockerfile` | Builds on `xwiki:stable-postgres-tomcat`, relocates writable dirs for Cloudron's read-only rootfs |
+| `start.sh` | Seeds `/app/data`, maps the Cloudron PostgreSQL addon to XWiki's `DB_*` vars, handles version upgrades |
 | `DESCRIPTION.md` | Store description text |
 | `CloudronVersions.json` | Version catalog for the Community App installer (auto-updated by CI) |
 | `CHANGELOG` | Per-version changelog shown in Cloudron |
@@ -78,7 +85,7 @@ cloudron install --location wiki.your-domain.com
 ```
 
 Cloudron uploads the folder, builds the image **on the server**, provisions a
-MySQL database and starts the app.
+PostgreSQL database and starts the app.
 
 > First boot builds the whole XWiki schema and can take several minutes. Follow
 > it with `cloudron logs -f`. The app is reachable once you see Tomcat report the
@@ -91,11 +98,11 @@ MySQL database and starts the app.
 cloudron update --app wiki.your-domain.com
 ```
 
-To move to a newer XWiki release, either keep `stable-mysql-tomcat` (rebuild
+To move to a newer XWiki release, either keep `stable-postgres-tomcat` (rebuild
 picks up the latest) or pin an explicit tag in the `Dockerfile`, e.g.:
 
 ```dockerfile
-FROM xwiki:17.10-mysql-tomcat
+FROM xwiki:17.10-postgres-tomcat
 ```
 
 On the next start `start.sh` detects the version change, reseeds the webapp and
@@ -109,9 +116,9 @@ first (`cloudron update` does this automatically).
 cloudron logs -f                       # follow logs
 cloudron exec                          # shell inside the container
 # check the DB connection from inside the app:
-cloudron exec -- mysql --user="$CLOUDRON_MYSQL_USERNAME" \
-  --password="$CLOUDRON_MYSQL_PASSWORD" --host="$CLOUDRON_MYSQL_HOST" \
-  "$CLOUDRON_MYSQL_DATABASE"
+cloudron exec -- bash -c 'PGPASSWORD="$CLOUDRON_POSTGRESQL_PASSWORD" psql \
+  -h "$CLOUDRON_POSTGRESQL_HOST" -p "$CLOUDRON_POSTGRESQL_PORT" \
+  -U "$CLOUDRON_POSTGRESQL_USERNAME" -d "$CLOUDRON_POSTGRESQL_DATABASE"'
 ```
 
 ## How it works (design notes)
@@ -121,10 +128,11 @@ cloudron exec -- mysql --user="$CLOUDRON_MYSQL_USERNAME" \
   `/usr/local/xwiki` to `/app/pkg/*-dist` and symlinks the runtime paths into
   `/app/data` (seeded on first boot). Everything under `/app/data` is included
   in Cloudron backups.
-- **Database.** The Cloudron `mysql` addon exposes `CLOUDRON_MYSQL_*`. `start.sh`
-  maps these to the `DB_USER` / `DB_PASSWORD` / `DB_DATABASE` / `DB_HOST`
-  variables the official XWiki entrypoint consumes (host and port are folded
-  into `DB_HOST`).
+- **Database.** The Cloudron `postgresql` addon exposes `CLOUDRON_POSTGRESQL_*`.
+  `start.sh` maps these to the `DB_USER` / `DB_PASSWORD` / `DB_DATABASE` /
+  `DB_HOST` variables the official XWiki entrypoint consumes. The stock Postgres
+  hibernate template hardcodes port `5432`; `start.sh` turns that into a
+  placeholder and injects the addon's actual port, so any port works.
 - **Config re-applied each boot.** Because Cloudron addon credentials can change
   across restarts, `start.sh` restores a pristine (placeholder) hibernate config
   and clears the entrypoint's first-start marker so the DB settings are
@@ -135,10 +143,9 @@ cloudron exec -- mysql --user="$CLOUDRON_MYSQL_USERNAME" \
 
 ## Known caveats
 
-- **Collation.** XWiki recommends the `utf8mb4_bin` collation; the Cloudron
-  MySQL addon provisions databases as `utf8mb4_unicode_ci`. XWiki runs fine on
-  this, but page-name case handling is less strict. If you need binary collation
-  you'd have to alter the database after creation.
+- **Subwikis.** XWiki's multi-wiki feature needs to create additional
+  schemas/databases, which the Cloudron-provisioned DB user is not allowed to do.
+  A single main wiki works fully; subwikis do not.
 - **Embedded Solr.** This package uses XWiki's embedded search index (stored in
   the permanent directory). For large wikis, XWiki recommends an external Solr;
   that would be a separate addon/container and is out of scope for v1.
