@@ -1,0 +1,92 @@
+name: Build & publish Cloudron community app
+
+# Builds the XWiki image, pushes it to GitHub Container Registry (ghcr.io),
+# and updates CloudronVersions.json so it can be installed from the Cloudron
+# dashboard via "Add custom app -> Community App".
+#
+# Trigger: manually, or on any push that changes the package files on main.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - "Dockerfile"
+      - "start.sh"
+      - "CloudronManifest.json"
+      - "DESCRIPTION.md"
+      - "CHANGELOG"
+      - ".github/workflows/publish.yml"
+
+permissions:
+  contents: write      # to commit the updated CloudronVersions.json
+  packages: write      # to push the image to ghcr.io
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read app version
+        id: meta
+        run: |
+          VERSION=$(python3 -c "import json;print(json.load(open('CloudronManifest.json'))['version'])")
+          OWNER=$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "image=ghcr.io/${OWNER}/xwiki-cloudron:${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "latest=ghcr.io/${OWNER}/xwiki-cloudron:latest" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.image }}
+            ${{ steps.meta.outputs.latest }}
+
+      - name: Update CloudronVersions.json
+        run: |
+          npm install -g cloudron
+          # Remove any existing entry for this version so `versions add` is idempotent.
+          python3 - "${{ steps.meta.outputs.version }}" <<'PY'
+          import json, os, sys
+          v = sys.argv[1]
+          p = "CloudronVersions.json"
+          data = json.load(open(p)) if os.path.exists(p) else {"stable": True, "versions": {}}
+          data.setdefault("versions", {}).pop(v, None)
+          json.dump(data, open(p, "w"), indent=4)
+          PY
+          cloudron versions add --image "${{ steps.meta.outputs.image }}"
+
+      - name: Commit updated catalog
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet CloudronVersions.json; then
+            git add CloudronVersions.json
+            git commit -m "ci: publish v${{ steps.meta.outputs.version }}"
+            git push
+          else
+            echo "No changes to CloudronVersions.json"
+          fi
+
+      - name: Summary
+        run: |
+          echo "### Published \`${{ steps.meta.outputs.image }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Install URL for the Cloudron **Community App** box:" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`\`\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/main/CloudronVersions.json" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`\`\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "> Make sure the package is **public**: Repo -> Packages -> xwiki-cloudron -> Package settings -> Change visibility -> Public." >> "$GITHUB_STEP_SUMMARY"
