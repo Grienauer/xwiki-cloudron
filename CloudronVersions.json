@@ -1,4 +1,47 @@
 {
     "stable": true,
-    "versions": {}
+    "versions": {
+        "2.0.0": {
+            "manifest": {
+                "id": "org.xwiki.cloudronapp",
+                "title": "XWiki",
+                "author": "Grienauer Nico",
+                "description": "XWiki is a free and open source, Java-based enterprise wiki platform with a\nstrong focus on extensibility. It offers structured content, powerful in-place\nWYSIWYG editing, application development on top of the wiki, fine-grained rights\nmanagement and a Confluence import - which makes it a common self-hosted\nConfluence replacement.\n\nThis package wraps the official `xwiki` Docker image (Tomcat + PostgreSQL\nflavour) so it runs inside Cloudron's managed environment: the database is\nprovided by the Cloudron PostgreSQL addon, all state lives in the app's\nbacked-up `/app/data` volume, and TLS / domain / backups are handled by\nCloudron.\n",
+                "tagline": "The advanced open source enterprise wiki",
+                "version": "2.0.0",
+                "healthCheckPath": "/",
+                "httpPort": 8080,
+                "manifestVersion": 2,
+                "website": "https://www.xwiki.org",
+                "contactEmail": "nico@grienauer.com",
+                "memoryLimit": 3221225472,
+                "tags": [
+                    "wiki",
+                    "knowledge base",
+                    "confluence alternative",
+                    "documentation"
+                ],
+                "addons": {
+                    "postgresql": {},
+                    "localstorage": {},
+                    "sendmail": {
+                        "optional": true
+                    }
+                },
+                "postInstallMessage": "XWiki is starting. The first boot builds the database schema and can take several minutes - follow it with `cloudron logs -f`. Once it finishes, open the app and complete the setup wizard to create the initial admin user.\n\nNote: subwikis (multi-wiki) are unavailable because the app's database user cannot create additional databases/schemas beyond its own.",
+                "iconUrl": "https://raw.githubusercontent.com/grienauer/xwiki-cloudron/main/logo.png",
+                "packagerName": "Nico Grienauer",
+                "packagerUrl": "https://www.grienauer.com",
+                "minBoxVersion": "9.1.0",
+                "changelog": "* Switch database from MySQL to PostgreSQL. This removes the manual one-time MySQL PROCESS-privilege grant and utf8mb4_bin collation step - XWiki now initializes with no manual database steps. NOTE: this is a database engine change, so it requires a fresh install (no in-place upgrade from 1.x).\n",
+                "mediaLinks": [
+                    "https://raw.githubusercontent.com/grienauer/xwiki-cloudron/main/screenshot.png"
+                ],
+                "dockerImage": "ghcr.io/grienauer/xwiki-cloudron:2.0.0"
+            },
+            "creationDate": "Fri, 17 Jul 2026 13:50:41 GMT",
+            "ts": "Fri, 17 Jul 2026 13:50:41 GMT",
+            "publishState": "published"
+        }
+    }
 }
