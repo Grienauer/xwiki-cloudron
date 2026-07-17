@@ -4,7 +4,7 @@
   "author": "Grienauer Nico",
   "description": "file://DESCRIPTION.md",
   "tagline": "The advanced open source enterprise wiki",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "healthCheckPath": "/",
   "httpPort": 8080,
   "manifestVersion": 2,
@@ -19,12 +19,13 @@
   ],
   "addons": {
     "postgresql": {},
+    "ldap": {},
     "localstorage": {},
     "sendmail": {
       "optional": true
     }
   },
-  "postInstallMessage": "XWiki is starting. The first boot builds the database schema and can take several minutes - follow it with `cloudron logs -f`. Once it finishes, open the app and complete the setup wizard to create the initial admin user.\n\nNote: subwikis (multi-wiki) are unavailable because the app's database user cannot create additional databases/schemas beyond its own.",
+  "postInstallMessage": "XWiki is starting. The first boot builds the database schema and can take several minutes - follow it with `cloudron logs -f`.\n\n**Authentication:** This build is wired to your Cloudron user directory via LDAP - your Cloudron users can log in with their Cloudron username (or email) and password; accounts are created in XWiki automatically on first login. Local XWiki accounts still work too (`trylocal`), so complete the setup wizard to create the initial admin.\n\nNote: subwikis (multi-wiki) are unavailable because the app's database user cannot create additional databases/schemas beyond its own.",
   "iconUrl": "https://raw.githubusercontent.com/grienauer/xwiki-cloudron/main/logo.png",
   "packagerName": "Nico Grienauer",
   "packagerUrl": "https://www.grienauer.com",

@@ -1,3 +1,6 @@
+[3.0.0]
+* Add LDAP single sign-on against the Cloudron user directory. Enables the Cloudron `ldap` addon, bakes the XWiki LDAP Authenticator extension into the image, and auto-configures xwiki.cfg from the CLOUDRON_LDAP_* variables on every boot. Cloudron users can log in with their Cloudron credentials; local accounts still work (trylocal). NOTE: the LDAP addon cannot be added to an existing install, so this requires a fresh install (no in-place upgrade from 2.x).
+
 [2.0.0]
 * Switch database from MySQL to PostgreSQL. This removes the manual one-time MySQL PROCESS-privilege grant and utf8mb4_bin collation step - XWiki now initializes with no manual database steps. NOTE: this is a database engine change, so it requires a fresh install (no in-place upgrade from 1.x).
 

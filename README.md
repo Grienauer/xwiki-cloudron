@@ -17,9 +17,9 @@ handling.
 
 | File | Purpose |
 |------|---------|
-| `CloudronManifest.json` | App metadata, PostgreSQL + localstorage + sendmail addons, 3 GB memory limit, port 8080 |
-| `Dockerfile` | Builds on `xwiki:stable-postgres-tomcat`, relocates writable dirs for Cloudron's read-only rootfs |
-| `start.sh` | Seeds `/app/data`, maps the Cloudron PostgreSQL addon to XWiki's `DB_*` vars, handles version upgrades |
+| `CloudronManifest.json` | App metadata, PostgreSQL + ldap + localstorage + sendmail addons, 3 GB memory limit, port 8080 |
+| `Dockerfile` | Multi-stage: bakes the LDAP Authenticator extension in, builds on `xwiki:stable-postgres-tomcat`, relocates writable dirs for Cloudron's read-only rootfs |
+| `start.sh` | Seeds `/app/data`, maps the PostgreSQL addon to XWiki's `DB_*` vars, auto-configures LDAP from the `CLOUDRON_LDAP_*` vars, handles version upgrades |
 | `DESCRIPTION.md` | Store description text |
 | `CloudronVersions.json` | Version catalog for the Community App installer (auto-updated by CI) |
 | `CHANGELOG` | Per-version changelog shown in Cloudron |
@@ -142,6 +142,42 @@ cloudron install --location wiki.your-domain.com
 Cloudron uploads the folder and builds the image **on the server** instead of
 pulling a pre-built one.
 
+## Authentication (LDAP / Cloudron users)
+
+This package authenticates XWiki against the **Cloudron user directory** using
+the Cloudron `ldap` addon — no manual LDAP setup, no TLS/IP-whitelisting.
+
+How it works:
+
+- The manifest enables the `ldap` addon, so Cloudron injects `CLOUDRON_LDAP_*`
+  (an internal, plaintext LDAP endpoint scoped to this app).
+- The **LDAP Authenticator** extension JARs are baked into the image at build
+  time (Maven multi-stage → `WEB-INF/lib`).
+- On every boot, `start.sh` writes a managed LDAP block into `xwiki.cfg`
+  (authenticator class, server, port, base DN, bind DN/password, field mapping).
+  Users log in with their Cloudron **username or email**; XWiki creates the
+  account on first login and refreshes name/email each time.
+- `trylocal=1` keeps local XWiki accounts working, so the admin created by the
+  setup wizard still logs in.
+
+> **Requires a fresh install.** Cloudron cannot add the `ldap` addon to an
+> already-installed app, so moving from 2.x to 3.x is not an in-place upgrade —
+> install the app fresh.
+
+Restrict who can log in (optional): add an `xwiki.authentication.ldap.user_group`
+line to the managed block in `start.sh` pointing at a Cloudron group DN under
+`ou=groups,dc=cloudron`.
+
+Troubleshoot: enable debug logging for `org.xwiki.contrib.ldap` via
+Administration → Logging (or add it to `WEB-INF/classes/logback.xml`), then watch
+`cloudron logs -f` during a login attempt.
+
+If the logs show a "cannot load class `...XWikiLDAPAuthServiceImpl`" error, the
+baked JAR set was incomplete — install **LDAP Authenticator** once from
+Administration → Extensions (it resolves its own dependencies and persists in the
+permanent directory), then restart. Tell me if that happens and I'll pin the
+missing dependency in the Dockerfile.
+
 ## Useful commands
 
 ```bash
@@ -169,6 +205,10 @@ cloudron exec -- bash -c 'PGPASSWORD="$CLOUDRON_POSTGRESQL_PASSWORD" psql \
   across restarts, `start.sh` restores a pristine (placeholder) hibernate config
   and clears the entrypoint's first-start marker so the DB settings are
   re-written on every start.
+- **LDAP.** The `ldap` addon exposes `CLOUDRON_LDAP_*`. The LDAP Authenticator
+  extension is baked into `WEB-INF/lib`, and `start.sh` rewrites a managed LDAP
+  block in `xwiki.cfg` each boot from those vars — so the config always tracks
+  the current addon credentials and survives XWiki upgrades.
 - **Memory.** JVM heap is set to `-Xmx2048m`; the container limit is 3 GB
   (`memoryLimit` in the manifest) to leave room for LibreOffice and native
   memory. Raise both for large wikis. XWiki needs ~1 GB heap minimum.

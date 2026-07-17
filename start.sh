@@ -74,6 +74,63 @@ if [[ -f "${HIBERNATE_DIST}" ]]; then
 fi
 rm -f "${DATA_TOMCAT}/webapps/ROOT/.first_start_completed"
 
+# ---- 4. Wire XWiki authentication to the Cloudron LDAP directory ---------------
+# The Cloudron `ldap` addon injects CLOUDRON_LDAP_* pointing at an internal,
+# plaintext LDAP server scoped to this app. We (re)write the LDAP block of
+# xwiki.cfg on every boot so it always reflects the current addon credentials
+# and survives XWiki upgrades. The LDAP Authenticator JARs are baked into the
+# image (see Dockerfile). trylocal=1 keeps the local admin (created by the setup
+# wizard) usable alongside LDAP logins.
+configure_ldap() {
+    local cfg="${WEBINF}/xwiki.cfg"
+    [[ -f "${cfg}" ]] || return 0
+    if [[ -z "${CLOUDRON_LDAP_HOST:-}" ]]; then
+        echo "==> LDAP addon env not present - skipping LDAP configuration"
+        return 0
+    fi
+    echo "==> Configuring XWiki authentication against the Cloudron LDAP directory"
+    local keys=(
+        xwiki.authentication.authclass
+        xwiki.authentication.ldap
+        xwiki.authentication.ldap.trylocal
+        xwiki.authentication.ldap.ssl
+        xwiki.authentication.ldap.server
+        xwiki.authentication.ldap.port
+        xwiki.authentication.ldap.base_DN
+        xwiki.authentication.ldap.bind_DN
+        xwiki.authentication.ldap.bind_pass
+        xwiki.authentication.ldap.UID_attr
+        xwiki.authentication.ldap.user_search_fmt
+        xwiki.authentication.ldap.fields_mapping
+        xwiki.authentication.ldap.update_user
+    )
+    # Strip any existing (commented or active) occurrences to avoid duplicates.
+    local k kre
+    for k in "${keys[@]}"; do
+        kre="${k//./\\.}"
+        sed -i "/^#\{0,1\}[[:space:]]*${kre}[[:space:]]*=/d" "${cfg}"
+    done
+    # Append a clean, managed block. Values are written literally (no shell/sed
+    # interpolation) so DNs, commas and generated passwords are safe.
+    {
+        echo "# --- Managed by start.sh: Cloudron LDAP integration (do not edit) ---"
+        echo "xwiki.authentication.authclass=org.xwiki.contrib.ldap.XWikiLDAPAuthServiceImpl"
+        echo "xwiki.authentication.ldap=1"
+        echo "xwiki.authentication.ldap.trylocal=1"
+        echo "xwiki.authentication.ldap.ssl=0"
+        echo "xwiki.authentication.ldap.server=${CLOUDRON_LDAP_HOST}"
+        echo "xwiki.authentication.ldap.port=${CLOUDRON_LDAP_PORT}"
+        echo "xwiki.authentication.ldap.base_DN=${CLOUDRON_LDAP_USERS_BASE_DN}"
+        echo "xwiki.authentication.ldap.bind_DN=${CLOUDRON_LDAP_BIND_DN}"
+        echo "xwiki.authentication.ldap.bind_pass=${CLOUDRON_LDAP_BIND_PASSWORD}"
+        echo "xwiki.authentication.ldap.UID_attr=username"
+        echo "xwiki.authentication.ldap.user_search_fmt=(&(objectclass=user)(|(username={1})(mail={1})))"
+        echo "xwiki.authentication.ldap.fields_mapping=last_name=sn,first_name=givenName,email=mail"
+        echo "xwiki.authentication.ldap.update_user=1"
+    } >> "${cfg}"
+}
+configure_ldap
+
 # Give the JVM enough heap for XWiki. The container's hard memory limit is set
 # separately in CloudronManifest.json (memoryLimit) and must stay comfortably
 # above this heap size to leave room for LibreOffice + native memory.
