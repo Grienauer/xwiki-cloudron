@@ -15,6 +15,12 @@
 # them into WEB-INF/lib (the documented "manual install" method). We let Maven
 # resolve the transitive set and exclude the XWiki platform/commons/rendering
 # groups that already ship inside the base image, to avoid version conflicts.
+# Also exclude org.apache.tika: ldap-authenticator pins xwiki-platform-oldcore
+# to a very old version (10.11), which drags in an ancient Tika as a transitive
+# dependency. Copying that ancient Tika jar alongside the base image's modern
+# one splits the classpath (old TikaInputStream vs new ZipContainerDetector,
+# or vice versa) and throws NoSuchMethodError on every attachment upload,
+# since XWiki now runs Tika-based mimetype detection during upload validation.
 # ---------------------------------------------------------------------------
 FROM maven:3-eclipse-temurin-21 AS ldap
 ARG LDAP_AUTHENTICATOR_VERSION=9.16.2
@@ -40,7 +46,7 @@ RUN printf '%s\n' \
   '</project>' > pom.xml && \
     mvn -q -B dependency:copy-dependencies \
       -DincludeScope=runtime \
-      -DexcludeGroupIds=org.xwiki.platform,org.xwiki.commons,org.xwiki.rendering \
+      -DexcludeGroupIds=org.xwiki.platform,org.xwiki.commons,org.xwiki.rendering,org.apache.tika \
       -DoutputDirectory=/deps
 
 # ---------------------------------------------------------------------------

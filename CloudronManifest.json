@@ -4,7 +4,7 @@
   "author": "Grienauer Nico",
   "description": "file://DESCRIPTION.md",
   "tagline": "The advanced open source enterprise wiki",
-  "version": "3.0.1",
+  "version": "3.0.2",
   "healthCheckPath": "/",
   "httpPort": 8080,
   "manifestVersion": 2,
