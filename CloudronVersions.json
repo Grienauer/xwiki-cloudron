@@ -128,6 +128,49 @@
             "creationDate": "Sat, 18 Jul 2026 21:40:20 GMT",
             "ts": "Sat, 18 Jul 2026 21:40:20 GMT",
             "publishState": "published"
+        },
+        "3.0.3": {
+            "manifest": {
+                "id": "org.xwiki.cloudronapp",
+                "title": "XWiki",
+                "author": "Grienauer Nico",
+                "description": "XWiki is a free and open source, Java-based enterprise wiki platform with a\nstrong focus on extensibility. It offers structured content, powerful in-place\nWYSIWYG editing, application development on top of the wiki, fine-grained rights\nmanagement and a Confluence import - which makes it a common self-hosted\nConfluence replacement.\n\nThis package wraps the official `xwiki` Docker image (Tomcat + PostgreSQL\nflavour) so it runs inside Cloudron's managed environment: the database is\nprovided by the Cloudron PostgreSQL addon, authentication is wired to the\nCloudron user directory over LDAP (your Cloudron users can log in directly),\nall state lives in the app's backed-up `/app/data` volume, and TLS / domain /\nbackups are handled by Cloudron.\n",
+                "tagline": "The advanced open source enterprise wiki",
+                "version": "3.0.3",
+                "healthCheckPath": "/",
+                "httpPort": 8080,
+                "manifestVersion": 2,
+                "website": "https://www.xwiki.org",
+                "contactEmail": "nico@grienauer.com",
+                "memoryLimit": 3221225472,
+                "tags": [
+                    "wiki",
+                    "knowledge base",
+                    "confluence alternative",
+                    "documentation"
+                ],
+                "addons": {
+                    "postgresql": {},
+                    "ldap": {},
+                    "localstorage": {},
+                    "sendmail": {
+                        "optional": true
+                    }
+                },
+                "postInstallMessage": "XWiki is starting. The first boot builds the database schema and can take several minutes - follow it with `cloudron logs -f`.\n\n**Authentication:** This build is wired to your Cloudron user directory via LDAP - your Cloudron users can log in with their Cloudron username (or email) and password; accounts are created in XWiki automatically on first login. Local XWiki accounts still work too (`trylocal`), so complete the setup wizard to create the initial admin.\n\nNote: subwikis (multi-wiki) are unavailable because the app's database user cannot create additional databases/schemas beyond its own.",
+                "iconUrl": "https://raw.githubusercontent.com/grienauer/xwiki-cloudron/main/logo.png",
+                "packagerName": "Nico Grienauer",
+                "packagerUrl": "https://www.grienauer.com",
+                "minBoxVersion": "9.1.0",
+                "changelog": "* Fix the 3.0.2 Tika fix never reaching existing installs: start.sh only reseeds the Tomcat webapp tree (where WEB-INF/lib lives) when the upstream XWiki release version changes. The 3.0.2 fix only changed which JARs we bake in, not the upstream XWiki version, so upgrading in place never picked it up. The version marker now also includes our own package version, so every release we ship reseeds the webapp on upgrade (permanent data + database are still preserved).\n",
+                "mediaLinks": [
+                    "https://raw.githubusercontent.com/grienauer/xwiki-cloudron/main/screenshot.png"
+                ],
+                "dockerImage": "ghcr.io/grienauer/xwiki-cloudron:3.0.3"
+            },
+            "creationDate": "Sun, 19 Jul 2026 11:19:00 GMT",
+            "ts": "Sun, 19 Jul 2026 11:19:00 GMT",
+            "publishState": "published"
         }
     }
 }
