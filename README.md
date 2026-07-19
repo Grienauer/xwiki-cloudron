@@ -33,7 +33,7 @@ No CLI, no clone, no GitHub account of your own needed — this repo already
 publishes a maintained image and version catalog. In your Cloudron dashboard:
 
 1. **Add custom app → Community App**.
-2Paste this **CloudronVersions.json URL**:
+2. Paste this **CloudronVersions.json URL**:
 
    ```
    https://raw.githubusercontent.com/grienauer/xwiki-cloudron/main/CloudronVersions.json

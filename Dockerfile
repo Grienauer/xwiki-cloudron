@@ -75,14 +75,21 @@ RUN LIB=/usr/local/tomcat/webapps/ROOT/WEB-INF/lib && \
 # and to its permanent directory. We therefore move the baked distribution aside
 # under /app/pkg and symlink the runtime paths into the persistent /app/data
 # volume. start.sh populates /app/data on first boot.
+COPY CloudronManifest.json /tmp/CloudronManifest.json
 RUN mkdir -p /app/pkg /app/code && \
     mv /usr/local/tomcat /app/pkg/tomcat-dist && \
     mv /usr/local/xwiki  /app/pkg/xwiki-dist && \
     ln -s /app/data/tomcat /usr/local/tomcat && \
     ln -s /app/data/xwiki  /usr/local/xwiki && \
     # Record the XWiki version baked into this image so start.sh can detect
-    # upgrades and reseed the webapp while preserving data + database.
-    printf '%s\n' "${XWIKI_VERSION}" > /app/pkg/xwiki.version
+    # upgrades and reseed the webapp while preserving data + database. Append
+    # our own package version too: the upstream XWiki release can be unchanged
+    # between two of our releases (e.g. a WEB-INF/lib dependency fix like this
+    # one), and without it start.sh would never reseed and the fix would never
+    # reach already-installed apps.
+    APP_VERSION="$(grep -o '"version"[[:space:]]*:[[:space:]]*"[^"]*"' /tmp/CloudronManifest.json | head -1 | sed -E 's/.*"([^"]+)"$/\1/')" && \
+    printf '%s+%s\n' "${XWIKI_VERSION}" "${APP_VERSION}" > /app/pkg/xwiki.version && \
+    rm /tmp/CloudronManifest.json
 
 COPY start.sh /app/code/start.sh
 RUN chmod +x /app/code/start.sh

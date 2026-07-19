@@ -1,3 +1,6 @@
+[3.0.3]
+* Fix the 3.0.2 Tika fix never reaching existing installs: start.sh only reseeds the Tomcat webapp tree (where WEB-INF/lib lives) when the upstream XWiki release version changes. The 3.0.2 fix only changed which JARs we bake in, not the upstream XWiki version, so upgrading in place never picked it up. The version marker now also includes our own package version, so every release we ship reseeds the webapp on upgrade (permanent data + database are still preserved).
+
 [3.0.2]
 * Fix HTTP 500 on every file upload: the LDAP dependency resolution stage pulled in an ancient, incompatible Tika (via ldap-authenticator's pin to xwiki-platform-oldcore 10.11), which split the classpath against the base image's modern Tika and threw NoSuchMethodError during attachment mimetype validation. Exclude org.apache.tika from the copied dependencies so only the base image's own Tika is used.
 
