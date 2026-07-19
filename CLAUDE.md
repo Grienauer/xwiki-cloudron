@@ -24,7 +24,7 @@ internals, invariants, and gotchas that matter when changing the Dockerfile,
   read-only at runtime and only `/tmp`, `/run`, `/app/data` are writable.
 - **`start.sh`:** runs on every boot.
   1. Seeds/reseeds `/app/data/tomcat` and `/app/data/xwiki` from the baked
-     dist (see "Reseed version marker" below).
+     dist (see "Reseed version markers" below).
   2. Maps `CLOUDRON_POSTGRESQL_*` → the `DB_*` vars the upstream entrypoint
      expects, and patches the hardcoded `:5432` in `hibernate.cfg.xml` to the
      addon's actual port.
@@ -34,32 +34,66 @@ internals, invariants, and gotchas that matter when changing the Dockerfile,
      vars (idempotent: strips old managed lines first).
   5. `exec`s the upstream `docker-entrypoint.sh xwiki`.
 
-## Critical invariant: the reseed version marker
+## Critical invariant: the two reseed version markers
 
-`start.sh` decides whether to wipe and reseed `/app/data/tomcat` (which is
-where `WEB-INF/lib` — and therefore any jar we bake in — lives) by comparing
-two version strings:
+`start.sh` tracks **two** separate version markers, because a full wipe of
+`/app/data/tomcat` and a targeted refresh have very different blast radii:
 
-- `/app/pkg/xwiki.version` — baked into the image at build time.
-- `/app/data/xwiki.version` — the version installed on the persistent volume,
-  left over from whenever the app was last seeded.
+- `xwiki-upstream.version` — just `${XWIKI_VERSION}`, the base image's XWiki
+  release. Changing this means the *upstream distribution itself* moved, so
+  `start.sh` does a **full wipe-and-recopy** of `/app/data/tomcat` from the
+  baked dist (`seed_tomcat`).
+- `xwiki.version` — `${XWIKI_VERSION}+${CloudronManifest.json version}`.
+  Changing this while `xwiki-upstream.version` stays the same means *only our
+  own packaging* changed (e.g. a `WEB-INF/lib` dependency fix). `start.sh`
+  then does a **targeted resync of just the baked LDAP jars**
+  (`sync_ldap_jars`, driven by the `ldap-jars.list` manifest written in the
+  Dockerfile) — it never wipes the rest of `WEB-INF/lib`.
 
-**This marker must change on every release that touches anything under
-`WEB-INF` or the Tomcat tree** — not just when the upstream XWiki version
-bumps. It currently encodes `${XWIKI_VERSION}+${CloudronManifest.json
-version}` (set in the Dockerfile around the `mv /usr/local/tomcat ...` step).
+Both are baked at build time under `/app/pkg/`, compared against copies
+persisted under `/app/data/` from whenever the app was last seeded.
 
-This is a real incident, not a hypothetical: v3.0.2 fixed a broken LDAP jar in
-`WEB-INF/lib` (see CHANGELOG), but the marker only tracked
-`${XWIKI_VERSION}`, which was unchanged from v3.0.1 — so upgrading in-place
-never reseeded, and users kept hitting the bug on the "fixed" version. v3.0.3
-fixed the marker itself. **If you ever revert the marker to just
-`${XWIKI_VERSION}`, this bug comes back.**
+**Why the distinction matters:** a full wipe of `/app/data/tomcat` deletes
+*anything* under `WEB-INF/lib`, including extensions XWiki's own Extension
+Manager installs directly there at runtime (e.g. CKEditor Integration and its
+webjar dependencies — these are not part of our baked distribution, so a full
+wipe deletes them permanently). Two real incidents chain together here:
 
-Corollary: any change to the Dockerfile's `WEB-INF/lib` contents, Tomcat
-config templates, or anything else under `/app/pkg/tomcat-dist` requires a
-`CloudronManifest.json` version bump to actually reach existing installs —
-even if the upstream XWiki version tag hasn't moved.
+1. **v3.0.2** fixed a broken LDAP jar in `WEB-INF/lib` (see CHANGELOG), but
+   back then there was only a single marker tracking `${XWIKI_VERSION}`,
+   unchanged since v3.0.1 — so upgrading in-place never reseeded, and users
+   kept hitting the bug on the "fixed" version.
+2. **v3.0.3** fixed that marker to also include our own version. This worked
+   — but it meant the *first real reseed this app had ever gone through*
+   was a full wipe, which deleted the CKEditor/webjar extensions that had
+   been silently surviving (by accident) across every prior "upgrade" that
+   never actually reseeded. Editing any page broke (blank editor, 404s on
+   `/webjars/...`), with no server-side exception — clean 404s for genuinely
+   missing files.
+3. **v3.0.4** split the single marker into the two above, so a packaging-only
+   release like 3.0.2 reaches existing installs *without* touching anything
+   in `WEB-INF/lib` beyond the specific LDAP jars we bake in ourselves.
+
+**If you ever collapse these back into a single marker that triggers a full
+wipe on every one of our own releases, this incident comes back** — and it
+will keep recurring on every packaging-only release going forward, not just
+once.
+
+Corollary: a genuine upstream XWiki version bump *will* still fully wipe
+`/app/data/tomcat`, and will still delete any Extension-Manager-installed
+`WEB-INF/lib` extensions at that point — reinstall them afterward via
+Administration → Extensions (or the Distribution Wizard). That's an inherent
+limit of Cloudron's read-only rootfs adaptation, not something start.sh can
+safely paper over (an old extension jar isn't guaranteed compatible with a
+new XWiki core version anyway).
+
+One more edge case worth knowing if you touch this logic again: upgrading
+from a pre-3.0.4 release (single marker) has no persisted
+`xwiki-upstream.version` to compare against. `start.sh` treats that as "assume
+upstream unchanged" and backfills the marker rather than forcing a full wipe
+— on the actual 3.0.3→3.0.4 transition the base image genuinely hadn't
+changed, and defaulting to a full wipe here would immediately re-delete
+whatever extensions were just reinstalled to recover from the 3.0.3 incident.
 
 ## Release process
 

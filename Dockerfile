@@ -56,15 +56,23 @@ FROM xwiki:stable-postgres-tomcat
 
 # Drop the LDAP Authenticator JARs into the webapp, skipping any artifact that is
 # already present in the image (avoids shipping a conflicting duplicate version).
+# Also record which jars we actually added, in /app/pkg/ldap-jars.list: start.sh
+# uses this manifest to refresh only these specific files on a packaging-only
+# release (see the reseed logic there), rather than wiping the whole WEB-INF/lib
+# - which would also delete extensions XWiki's own Extension Manager installs
+# directly into WEB-INF/lib at runtime (e.g. CKEditor Integration and its
+# webjar dependencies).
 COPY --from=ldap /deps /tmp/ldap-deps
-RUN LIB=/usr/local/tomcat/webapps/ROOT/WEB-INF/lib && \
+RUN mkdir -p /app/pkg && \
+    LIB=/usr/local/tomcat/webapps/ROOT/WEB-INF/lib && \
+    : > /app/pkg/ldap-jars.list && \
     for j in /tmp/ldap-deps/*.jar; do \
       base="$(basename "$j")"; \
       stem="$(echo "$base" | sed -E 's/-[0-9].*$//')"; \
       if ls "$LIB" | grep -qE "^${stem}-[0-9]"; then \
         echo "skip (already present): $base"; \
       else \
-        cp "$j" "$LIB/" && echo "added: $base"; \
+        cp "$j" "$LIB/" && echo "added: $base" && echo "$base" >> /app/pkg/ldap-jars.list; \
       fi; \
     done && \
     rm -rf /tmp/ldap-deps
@@ -81,12 +89,20 @@ RUN mkdir -p /app/pkg /app/code && \
     mv /usr/local/xwiki  /app/pkg/xwiki-dist && \
     ln -s /app/data/tomcat /usr/local/tomcat && \
     ln -s /app/data/xwiki  /usr/local/xwiki && \
-    # Record the XWiki version baked into this image so start.sh can detect
-    # upgrades and reseed the webapp while preserving data + database. Append
-    # our own package version too: the upstream XWiki release can be unchanged
-    # between two of our releases (e.g. a WEB-INF/lib dependency fix like this
-    # one), and without it start.sh would never reseed and the fix would never
-    # reach already-installed apps.
+    # Record two version markers so start.sh can tell apart two different kinds
+    # of release and reseed accordingly (see start.sh):
+    #   xwiki-upstream.version - just XWIKI_VERSION. Changes only when the base
+    #     image itself moves to a new XWiki release. Triggers a FULL reseed
+    #     (start.sh wipes and recopies the whole Tomcat tree), which is the only
+    #     safe option when the underlying distribution changed.
+    #   xwiki.version - XWIKI_VERSION plus our own CloudronManifest.json version.
+    #     Changes on every release we ship, including packaging-only fixes where
+    #     XWIKI_VERSION is unchanged (e.g. a WEB-INF/lib dependency fix like the
+    #     Tika exclusion above). Triggers a TARGETED resync of just the baked
+    #     LDAP jars (see ldap-jars.list above) - never a full wipe, since that
+    #     would also delete extensions the Extension Manager installs directly
+    #     into WEB-INF/lib at runtime (e.g. CKEditor Integration + its webjars).
+    printf '%s\n' "${XWIKI_VERSION}" > /app/pkg/xwiki-upstream.version && \
     APP_VERSION="$(grep -o '"version"[[:space:]]*:[[:space:]]*"[^"]*"' /tmp/CloudronManifest.json | head -1 | sed -E 's/.*"([^"]+)"$/\1/')" && \
     printf '%s+%s\n' "${XWIKI_VERSION}" "${APP_VERSION}" > /app/pkg/xwiki.version && \
     rm /tmp/CloudronManifest.json

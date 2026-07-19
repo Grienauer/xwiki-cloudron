@@ -1,3 +1,6 @@
+[3.0.4]
+* Fix the 3.0.3 reseed-marker fix destroying runtime-installed extensions: the first real reseed this app has ever gone through (see 3.0.3) did a full wipe-and-replace of the Tomcat tree, which deleted any extension XWiki's own Extension Manager had installed directly into WEB-INF/lib (e.g. CKEditor Integration and its webjar dependencies), breaking the page editor entirely. If you hit this, reinstall the missing extension(s) via Administration -> Extensions (or the Distribution Wizard). Going forward, a packaging-only release (upstream XWiki unchanged) only refreshes the specific LDAP dependency jars we bake in, never the whole WEB-INF/lib - a full reseed now only happens when the upstream XWiki version itself changes.
+
 [3.0.3]
 * Fix the 3.0.2 Tika fix never reaching existing installs: start.sh only reseeds the Tomcat webapp tree (where WEB-INF/lib lives) when the upstream XWiki release version changes. The 3.0.2 fix only changed which JARs we bake in, not the upstream XWiki version, so upgrading in place never picked it up. The version marker now also includes our own package version, so every release we ship reseeds the webapp on upgrade (permanent data + database are still preserved).
 

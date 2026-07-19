@@ -23,9 +23,13 @@ DATA_TOMCAT=/app/data/tomcat
 DATA_XWIKI=/app/data/xwiki
 WEBINF=${DATA_TOMCAT}/webapps/ROOT/WEB-INF
 HIBERNATE_DIST=${DATA_TOMCAT}/hibernate.cfg.xml.dist
+LDAP_JARS_DIST=/app/pkg/ldap-jars.list
+LDAP_JARS_DATA=/app/data/ldap-jars.list
 
 IMAGE_VERSION="$(cat /app/pkg/xwiki.version)"
+IMAGE_UPSTREAM_VERSION="$(cat /app/pkg/xwiki-upstream.version)"
 DATA_VERSION_FILE=/app/data/xwiki.version
+DATA_UPSTREAM_VERSION_FILE=/app/data/xwiki-upstream.version
 
 seed_tomcat() {
     rm -rf "${DATA_TOMCAT}"
@@ -38,6 +42,30 @@ seed_tomcat() {
     # Stash a pristine copy (still containing the replaceX placeholders) so we
     # can re-run the substitution on every boot.
     cp -a "${WEBINF}/hibernate.cfg.xml" "${HIBERNATE_DIST}"
+    cp -a "${LDAP_JARS_DIST}" "${LDAP_JARS_DATA}"
+}
+
+# Refresh only the baked LDAP dependency jars in WEB-INF/lib, without touching
+# anything else there. Used for packaging-only releases (XWiki itself
+# unchanged) - never do a full Tomcat wipe for these, since that would also
+# delete any extension XWiki's own Extension Manager installed directly into
+# WEB-INF/lib at runtime (e.g. CKEditor Integration and its webjar
+# dependencies), which do not come from our baked distribution and would be
+# gone for good. This is how a fix like "exclude org.apache.tika" (3.0.2)
+# reaches an existing install without collateral damage.
+sync_ldap_jars() {
+    local lib="${WEBINF}/lib"
+    if [[ -f "${LDAP_JARS_DATA}" ]]; then
+        while IFS= read -r jar; do
+            [[ -n "${jar}" ]] || continue
+            grep -qxF "${jar}" "${LDAP_JARS_DIST}" 2>/dev/null || rm -f "${lib}/${jar}"
+        done < "${LDAP_JARS_DATA}"
+    fi
+    while IFS= read -r jar; do
+        [[ -n "${jar}" ]] || continue
+        cp -a "${DIST_TOMCAT}/webapps/ROOT/WEB-INF/lib/${jar}" "${lib}/${jar}"
+    done < "${LDAP_JARS_DIST}"
+    cp -a "${LDAP_JARS_DIST}" "${LDAP_JARS_DATA}"
 }
 
 # ---- 1. Seed / upgrade the Tomcat + XWiki webapp -------------------------------
@@ -45,9 +73,29 @@ if [[ ! -d "${DATA_TOMCAT}" ]]; then
     echo "==> First run: seeding XWiki webapp v${IMAGE_VERSION} into /app/data"
     seed_tomcat
     echo "${IMAGE_VERSION}" > "${DATA_VERSION_FILE}"
-elif [[ "$(cat "${DATA_VERSION_FILE}" 2>/dev/null || true)" != "${IMAGE_VERSION}" ]]; then
-    echo "==> Upgrade detected: reseeding webapp to v${IMAGE_VERSION} (permanent data + database are preserved)"
+    echo "${IMAGE_UPSTREAM_VERSION}" > "${DATA_UPSTREAM_VERSION_FILE}"
+elif [[ ! -f "${DATA_UPSTREAM_VERSION_FILE}" ]]; then
+    # Upgrading from a release that predates the split-marker scheme (<= 3.0.3):
+    # we have no record of which upstream XWiki version was last seeded. The
+    # base image tag has not actually changed across our recent releases, so
+    # backfill the marker as "unchanged" rather than assuming an upstream bump
+    # - a full reseed here would immediately re-delete any extensions that
+    # were just reinstalled to recover from the 3.0.3 incident. Still apply the
+    # normal packaging-only sync below if our own version has moved on.
+    echo "==> Migrating to the split version-marker scheme (assuming upstream XWiki unchanged)"
+    echo "${IMAGE_UPSTREAM_VERSION}" > "${DATA_UPSTREAM_VERSION_FILE}"
+    if [[ "$(cat "${DATA_VERSION_FILE}" 2>/dev/null || true)" != "${IMAGE_VERSION}" ]]; then
+        sync_ldap_jars
+        echo "${IMAGE_VERSION}" > "${DATA_VERSION_FILE}"
+    fi
+elif [[ "$(cat "${DATA_UPSTREAM_VERSION_FILE}")" != "${IMAGE_UPSTREAM_VERSION}" ]]; then
+    echo "==> XWiki upgrade detected: reseeding webapp to v${IMAGE_UPSTREAM_VERSION} (permanent data + database are preserved)"
     seed_tomcat
+    echo "${IMAGE_VERSION}" > "${DATA_VERSION_FILE}"
+    echo "${IMAGE_UPSTREAM_VERSION}" > "${DATA_UPSTREAM_VERSION_FILE}"
+elif [[ "$(cat "${DATA_VERSION_FILE}" 2>/dev/null || true)" != "${IMAGE_VERSION}" ]]; then
+    echo "==> Packaging update detected (XWiki itself unchanged): refreshing baked LDAP dependency jars only"
+    sync_ldap_jars
     echo "${IMAGE_VERSION}" > "${DATA_VERSION_FILE}"
 fi
 
