@@ -75,7 +75,19 @@ jobs:
           if ! git diff --quiet CloudronVersions.json; then
             git add CloudronVersions.json
             git commit -m "ci: publish v${{ steps.meta.outputs.version }}"
-            git push
+            # The image build above can take several minutes, during which someone
+            # may push to main - rebase our single-file commit and retry rather than
+            # failing outright on a non-fast-forward push.
+            for i in 1 2 3 4 5; do
+              if git push; then
+                exit 0
+              fi
+              echo "Push rejected (attempt ${i}), rebasing onto latest main and retrying..."
+              git fetch origin main
+              git rebase origin/main
+            done
+            echo "::error::Failed to push CloudronVersions.json after 5 attempts"
+            exit 1
           else
             echo "No changes to CloudronVersions.json"
           fi
